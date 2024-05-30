@@ -2,10 +2,11 @@ const express = require('express');
 const app = express();
 const port = 3000;
 const path = require('path')
+require('dotenv').config()
 const fileUpload = require('express-fileupload')
 const BlogPost = require('./models/BlogPostSchema')
 const mongoose = require('mongoose');
-mongoose.connect('mongodb+srv://applicationanshul:XNtkAomh61LfasvO@thecodecomit.ldaxcs9.mongodb.net/sample')
+mongoose.connect(process.env.DB)
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
