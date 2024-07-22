@@ -5,7 +5,7 @@ const bcrypt = require("bcrypt");
 require('dotenv').config()
 
 // Models
-const User = require("./models/User");
+const User = require("../models/User");
 const mongoose = require("mongoose");
 
 const uri = process.env.MONGO_URI
@@ -175,5 +175,8 @@ app.get("/logout", (req, res) => {
   res.redirect("/login");
 });
 
+app.listen(3000, () => {
+  console.log("Hello! App listening on port 3000");
+});
 
 module.exports = app
