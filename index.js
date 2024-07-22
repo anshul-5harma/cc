@@ -5,7 +5,7 @@ const bcrypt = require("bcrypt");
 require('dotenv').config()
 
 // Models
-const User = require("../models/User");
+const User = require("./models/User");
 const mongoose = require("mongoose");
 
 const uri = process.env.MONGO_URI
