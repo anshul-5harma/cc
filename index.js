@@ -1,31 +1,182 @@
-const express = require('express');
-const app = express();
-const port = 3000;
-const path = require('path')
-const bodyParser = require("body-parser")
+// Imports
+const express = require("express");
+const session = require("express-session");
+const bcrypt = require("bcrypt");
 require('dotenv').config()
-const fileUpload = require('express-fileupload')
 
-const mongoose = require('mongoose');
-const newPostController = require('./controllers/newPost')
-const homeController = require('./controllers/home')
-const storePostController = require('./controllers/storePost')
-const getPostController = require('./controllers/getPost')
-const storeUserController = require('./controllers/storeUser')
+// Models
+const User = require("./models/User");
+const mongoose = require("mongoose");
 
-mongoose.connect(process.env.DB).then(() => "Connected to MongoDB");
+const uri = process.env.MONGO_URI
+// Config
+const app = express();
+app.set("view engine", "ejs");
+app.use(express.static("public"));
+app.use(express.json());
 
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-app.use(fileUpload({ createParentPath: true }))
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true }));
+app.use(session({ secret: "secret-key", resave: false, saveUninitialized: true }));
 
-app.get('/',homeController)
-app.get('/posts/new', newPostController)
-app.get('/post/:id',getPostController)
-app.post('/posts/store', storePostController)
-app.post('/user/new', storeUserController)
+// DB Connection
+mongoose
+  .connect(uri)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.log(err));
 
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
+// Middleware
+const authenticate = async (req, res, next) => {
+  if (req.session.userId) {
+    const user = await User.findById(req.session.userId);
+
+    if (!user) {
+      return res.redirect("/login");
+    }
+    req.user = user;
+    next();
+  } else {
+    res.redirect("/login");
+  }
+};
+
+// Get Routes
+app.get("/", (req, res) => {
+  res.render("index", { user: req.user });
+});
+
+app.get("/login", (req, res) => {
+  res.render("login", { user: req.user });
+});
+
+// Protected routes
+app.get("/class-g2", authenticate, (req, res) => {
+  console.log("req.user", req.user);
+  if (req.user.userType === "Driver") {
+    res.render("class-g2", { user: req.user });
+  } else {
+    res.status(403).send("Forbidden");
+  }
+});
+
+app.get("/class-g", authenticate, (req, res) => {
+  if (req.user.userType === "Driver") {
+    res.render("class-g", { user: req.user });
+  } else {
+    res.status(403).send("Forbidden");
+  }
+});
+
+app.get("/get-user/:licenseNumber", async (req, res) => {
+  const { licenseNumber } = req.params;
+
+  try {
+    const user = await User.findOne({ licenseNumber });
+
+    if (!user) {
+      res.status(404).send("No User Found");
+    } else {
+      res.status(200).json(user);
+    }
+  } catch (error) {
+    res.status(500).send("Error fetching user: " + error.message);
+  }
+});
+
+app.post("/save-user", async (req, res) => {
+  const { firstName, lastName, licenseNumber, age, dob, carMake, carModel, carYear, plateNumber } =
+    req.body;
+
+  const updatedUser = {
+    firstName,
+    lastName,
+    licenseNumber,
+    age,
+    dob,
+    car_details: {
+      make: carMake,
+      model: carModel,
+      year: carYear,
+      plateNumber,
+    },
+  };
+
+  console.log("req.user@update", req.user);
+  try {
+    let foundUser = await User.findOneAndUpdate({ _id: req.session.userId }, updatedUser);
+    res.status(200).json({ message: "User saved successfully", user: foundUser });
+  } catch (error) {
+    res.status(500).send("Error saving user: " + error.message);
+  }
+});
+
+app.post("/update-car", async (req, res) => {
+  const { licenseNumber, make, model, year, plateNumber } = req.body;
+
+  try {
+    const user = await User.findOne({ licenseNumber });
+
+    if (!user) {
+      res.status(404).send("No User Found");
+    } else {
+      user.car_details = {
+        make,
+        model,
+        year,
+        plateNumber,
+      };
+
+      await user.save();
+      res.status(200).send("Car details updated successfully");
+    }
+  } catch (error) {
+    res.status(500).send("Error updating car details: " + error.message);
+  }
+});
+
+//A-3
+
+// Sign up
+app.post("/signup", async (req, res) => {
+  try {
+    const { username, password, userType } = req.body;
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).send("Username already exists.");
+    }
+
+    let encryptedPassword = await bcrypt.hash(password, 10).then(function (hash) {
+      return hash;
+    });
+
+    const user = new User({ username, password: encryptedPassword, userType });
+    await user.save();
+    res.status(201).send("User created.");
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+// Login
+app.post("/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await User.findOne({ username });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(400).send("Invalid username or password.");
+    }
+    req.session.userId = user._id;
+    res.send("Login successful.");
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.get("/logout", (req, res) => {
+  req.session.destroy();
+  res.redirect("/login");
+});
+
+// Listen
+app.listen(3000, () => {
+  console.log("Hello! App listening on port 3000");
 });
