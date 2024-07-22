@@ -175,8 +175,8 @@ app.get("/logout", (req, res) => {
   res.redirect("/login");
 });
 
-app.listen(3000, () => {
-  console.log("Hello! App listening on port 3000");
+app.listen(process.env.PORT, () => {
+  console.log(`Hello! App listening on port ${process.env.PORT}`);
 });
 
 module.exports = app
